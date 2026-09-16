@@ -3,6 +3,7 @@ services:
     image: traefik:v3.6.2
     command:
       - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
       - "--entrypoints.web.address=:80"
     ports:
       - "8080:80"
@@ -42,12 +43,17 @@ services:
     build:
       context: ./order-service/OrderService
     depends_on:
-      - auth-service
-      - order-db
+      auth-service:
+        condition: service_started
+      order-db:
+        condition: service_started
+      temporal:
+        condition: service_healthy
     ports:
       - "8083:8080"
     environment:
       ConnectionStrings__OrdersDb: "Host=order-db;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}"
+      TEMPORAL_ADDRESS: "temporal:7233"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.order.rule=PathPrefix(`/api/v1/orders`)"
@@ -64,5 +70,90 @@ services:
     ports:
       - "8081:8080"
 
+  payment-service:
+    build:
+      context: ./payment-service/PaymentService
+    depends_on:
+      - auth-service
+    ports:
+      - "8084:8080"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.payment.rule=PathPrefix(`/api/v1/payments`)"
+      - "traefik.http.services.payment.loadbalancer.server.port=8080"
+      - "traefik.http.middlewares.payment-auth.forwardauth.address=http://auth-service:8080/validate"
+      - "traefik.http.routers.payment.middlewares=payment-auth"
+
+  ship-service:
+    build:
+      context: ./ship-service/ShipService
+    depends_on:
+      - auth-service
+    ports:
+      - "8085:8080"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.ship.rule=PathPrefix(`/api/v1/shipments`)"
+      - "traefik.http.services.ship.loadbalancer.server.port=8080"
+      - "traefik.http.middlewares.ship-auth.forwardauth.address=http://auth-service:8080/validate"
+      - "traefik.http.routers.ship.middlewares=ship-auth"
+
+  temporal-db:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${TEMPORAL_POSTGRES_USER}
+      POSTGRES_PASSWORD: ${TEMPORAL_POSTGRES_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal -d temporal"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - temporal-db-data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+
+  temporal:
+    image: temporalio/auto-setup:latest
+    depends_on:
+      temporal-db:
+        condition: service_healthy
+    environment:
+      - DB=postgres12_pgx
+      - DB_PORT=5432
+      - POSTGRES_USER=${TEMPORAL_POSTGRES_USER}
+      - POSTGRES_PWD=${TEMPORAL_POSTGRES_PASSWORD}
+      - POSTGRES_SEEDS=temporal-db
+    healthcheck:
+      test: ["CMD-SHELL", "temporal operator cluster health --address $$(hostname -i):7233"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    ports:
+      - "7233:7233"
+
+  temporal-ui:
+    image: temporalio/ui:latest
+    depends_on:
+      temporal:
+        condition: service_healthy
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
+    ports:
+      - "8088:8080"
+
+  order-workflow-worker:
+    build:
+      context: ./order-workflow-worker/OrderWorkflowWorker
+    depends_on:
+      temporal:
+        condition: service_healthy
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - OPS_WEBHOOK_URL=https://webhook.site/f351201a-21d1-44bd-b0ca-aa5838264490
+
 volumes:
   order-db-data:
+  temporal-db-data:

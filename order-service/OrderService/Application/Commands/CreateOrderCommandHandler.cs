@@ -17,12 +17,7 @@ public class CreateOrderCommandHandler : IRequestHandler<CreateOrderCommand, Cre
 
     public async Task<CreateOrderResult> Handle(CreateOrderCommand request, CancellationToken cancellationToken)
     {
-        var order = new Order
-        {
-            Id = Guid.NewGuid(),
-            Status = "Placed",
-            Amount = request.Amount,
-        };
+        var order = new Order(Guid.NewGuid(), "Placed", request.Amount);
 
         var result = await _repository.CreateOrderAsync(order, request.IdempotencyKey);
 

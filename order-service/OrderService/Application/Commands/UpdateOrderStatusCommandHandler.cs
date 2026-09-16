@@ -22,13 +22,15 @@ public class UpdateOrderStatusCommandHandler : IRequestHandler<UpdateOrderStatus
             return null;
         }
 
+        order.EnsureCanTransitionTo(request.Status);
+
         var succeeded = await _repository.UpdateStatusAsync(request.Id, request.Status, order.Status);
         if (!succeeded)
         {
             throw new OrderStatusConflictException(request.Id, order.Status);
         }
 
-        order.Status = request.Status;
+        order.ApplyStatusChange(request.Status);
         return order;
     }
 }

@@ -2,6 +2,7 @@ using MediatR;
 using OrderService.Application.Commands;
 using OrderService.Application.Exceptions;
 using OrderService.Application.Queries;
+using OrderService.Domain;
 
 namespace OrderService.Api;
 
@@ -12,9 +13,12 @@ public static class OrderEndpoints
         app.MapPost("/api/v1/orders", async (IMediator mediator, HttpRequest httpRequest, CreateOrderRequestBody body) =>
         {
             var idempotencyKeyHeader = httpRequest.Headers["Idempotency-Key"].ToString();
-            var idempotencyKey = string.IsNullOrEmpty(idempotencyKeyHeader) ? null : idempotencyKeyHeader;
+            if (string.IsNullOrEmpty(idempotencyKeyHeader))
+            {
+                return Results.BadRequest(new { error = "Idempotency-Key header is required." });
+            }
 
-            var command = new CreateOrderCommand(body.Amount, idempotencyKey);
+            var command = new CreateOrderCommand(body.Amount, idempotencyKeyHeader);
 
             try
             {
@@ -43,6 +47,10 @@ public static class OrderEndpoints
                 return order is not null ? Results.Ok(order) : Results.NotFound();
             }
             catch (OrderStatusConflictException ex)
+            {
+                return Results.Conflict(new { error = ex.Message });
+            }
+            catch (InvalidOrderStatusTransitionException ex)
             {
                 return Results.Conflict(new { error = ex.Message });
             }
