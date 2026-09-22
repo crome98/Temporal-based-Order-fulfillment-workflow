@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using OrderService.Application.Exceptions;
@@ -28,6 +29,15 @@ public class OrderRepository : IOrderRepository
                 OrderId = order.Id,
             });
         }
+
+        _db.OutboxMessages.Add(new OutboxMessageEntity
+        {
+            Id = Guid.NewGuid(),
+            EventType = "OrderCreated",
+            Payload = JsonSerializer.Serialize(new { orderId = order.Id, amount = order.Amount }),
+            Processed = false,
+            CreatedAt = DateTimeOffset.UtcNow,
+        });
 
         try
         {

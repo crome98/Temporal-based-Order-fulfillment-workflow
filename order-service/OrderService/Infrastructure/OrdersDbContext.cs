@@ -11,6 +11,7 @@ public class OrdersDbContext : DbContext
 
     public DbSet<Order> Orders => Set<Order>();
     public DbSet<IdempotencyKeyEntity> IdempotencyKeys => Set<IdempotencyKeyEntity>();
+    public DbSet<OutboxMessageEntity> OutboxMessages => Set<OutboxMessageEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -30,6 +31,17 @@ public class OrdersDbContext : DbContext
             entity.Property(k => k.Key).HasColumnName("key");
             entity.Property(k => k.Status).HasColumnName("status");
             entity.Property(k => k.OrderId).HasColumnName("order_id");
+        });
+
+        modelBuilder.Entity<OutboxMessageEntity>(entity =>
+        {
+            entity.ToTable("outbox_messages");
+            entity.HasKey(m => m.Id);
+            entity.Property(m => m.Id).HasColumnName("id");
+            entity.Property(m => m.EventType).HasColumnName("event_type");
+            entity.Property(m => m.Payload).HasColumnName("payload").HasColumnType("jsonb");
+            entity.Property(m => m.Processed).HasColumnName("processed");
+            entity.Property(m => m.CreatedAt).HasColumnName("created_at");
         });
     }
 }

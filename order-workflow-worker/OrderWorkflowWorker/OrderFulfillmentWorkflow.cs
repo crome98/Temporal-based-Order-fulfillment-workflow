@@ -31,6 +31,7 @@ public class OrderFulfillmentWorkflow
 
         try
         {
+            Workflow.Logger.LogDebug(String.Format("New Workflow For Order Id: {0}", orderId.ToString()));
             paymentResult = await Workflow.ExecuteActivityAsync(
                 (OrderActivities act) => act.ChargePaymentAsync(orderId, amount),
                 ActivityOptions);

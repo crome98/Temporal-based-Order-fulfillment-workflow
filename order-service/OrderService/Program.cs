@@ -15,6 +15,7 @@ builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 
 var temporalAddress = Environment.GetEnvironmentVariable("TEMPORAL_ADDRESS") ?? "localhost:7233";
 builder.Services.AddSingleton<ITemporalClient>(await TemporalClient.ConnectAsync(new(temporalAddress)));
+builder.Services.AddHostedService<OutboxProcessor>();
 
 var app = builder.Build();
 
